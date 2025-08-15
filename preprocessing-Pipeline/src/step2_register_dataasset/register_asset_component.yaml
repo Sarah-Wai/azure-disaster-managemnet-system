@@ -1,0 +1,32 @@
+name: register_predictions_asset
+display_name: Register Combined Predictions as DataAsset
+description: Registers combined_predictions.csv as a named DataAsset in Azure ML
+version: 1
+type: command
+
+inputs:
+  train_clean_data:
+    type: uri_folder
+  test_clean_data:
+    type: uri_folder
+  oridinary_meta_data:
+    type: uri_folder
+
+outputs:
+  train_asset_uri:
+    type: uri_file
+  test_asset_uri:
+    type: uri_file
+  original_meta_uri:
+    type: uri_file
+
+environment: azureml:xgboost-pipeline-env:1
+code: .
+command: >-
+  python register_asset.py
+  --train_clean_data ${{inputs.train_clean_data}}
+  --test_clean_data ${{inputs.test_clean_data}}
+  --oridinary_meta_data ${{inputs.oridinary_meta_data}}
+  --train_asset_uri ${{outputs.train_asset_uri}}
+  --test_asset_uri ${{outputs.test_asset_uri}}
+  --original_meta_uri ${{outputs.original_meta_uri}}

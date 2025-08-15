@@ -1,0 +1,27 @@
+name: data_preprocessing
+display_name: Preprocessing from Raw xBD Dataset
+description: Preprocessing from Raw xBD Dataset
+version: 1
+type: command
+
+inputs:
+  raw_xBDdata:
+    type: uri_folder
+
+outputs:
+  train_clean_data:
+    type: uri_folder
+  test_clean_data:
+    type: uri_folder
+  oridinary_meta_data:
+    type: uri_file
+
+environment: azureml:xgboost-pipeline-env:1
+code: .
+command: >-
+  python data_preprocessing.py
+  --raw_xBDdata ${{inputs.raw_xBDdata}}
+  --train_clean_data ${{outputs.train_clean_data}}
+  --test_clean_data ${{outputs.test_clean_data}}
+  --oridinary_meta_data ${{outputs.oridinary_meta_data}}
+
