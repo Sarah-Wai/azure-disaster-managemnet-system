@@ -1,0 +1,25 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: deploy_xgboost_to_aks
+display_name: Deploy XGBoost Model to AKS
+type: command
+inputs:
+  model_folder:
+    type: uri_folder
+  model_name:
+    type: string
+  aks_name:
+    type: string
+  endpoint_name:
+    type: string
+outputs:
+  endpoint_uri:
+    type: uri_file
+code: .
+environment: azureml:xgboost-pipeline-env:10
+command: >
+  python deploy_to_aks.py
+  --model_folder ${{inputs.model_folder}}
+  --model_name ${{inputs.model_name}}
+  --aks_name ${{inputs.aks_name}}
+  --endpoint_name ${{inputs.endpoint_name}}
+  --endpoint_uri ${{outputs.endpoint_uri}}

@@ -1,0 +1,10 @@
+name: custom_sklearn_1.0_azure_ai_ml
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - scikit-learn=1.0
+  - pip
+  - pip:
+      - azure-ai-ml
+      - azure-identity

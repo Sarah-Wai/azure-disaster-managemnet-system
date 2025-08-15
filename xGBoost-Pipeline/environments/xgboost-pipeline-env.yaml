@@ -1,0 +1,4 @@
+name: xgboost-pipeline-env
+image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
+conda_file: ./xgboost-conda.yaml
+description: Environment for XGBoost pipeline with Azure ML SDK

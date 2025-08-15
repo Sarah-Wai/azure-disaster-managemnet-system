@@ -1,0 +1,16 @@
+name: push_to_powerbi
+display_name: Deploy to Power BI
+version: 1
+type: command
+description: Push CSV output to Power BI streaming dataset
+inputs:
+  input_csv:
+    type: uri_file
+  power_bi_url:
+    type: string
+code: .
+environment: azureml:xgboost-pipeline-env:4
+command: >-
+  python push_to_powerbi.py
+  --input_csv ${{inputs.input_csv}}
+  --power_bi_url ${{inputs.power_bi_url}}

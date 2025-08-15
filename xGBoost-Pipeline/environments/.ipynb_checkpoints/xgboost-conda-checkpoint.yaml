@@ -1,0 +1,14 @@
+name: xgboost-pipeline-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - pip:
+      - azure-ai-ml
+      - azure-identity
+      - pandas
+      - numpy
+      - requests
+      - scikit-learn

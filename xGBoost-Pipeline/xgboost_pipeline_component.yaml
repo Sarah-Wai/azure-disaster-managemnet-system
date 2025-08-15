@@ -1,0 +1,22 @@
+name: xgboost_pipeline_component
+display_name: XGBoost Risk Engine Pipeline
+type: pipeline
+description: Pipeline to train an XGBoost model using ResNet outputs + enrichment
+version: 1
+
+inputs:
+  prediction_data:
+    type: uri_file
+
+outputs:
+  response_message:
+    type: uri_file
+
+jobs:
+  train_xgboost:
+    type: command
+    component: src/step2_merge_metadata_prediction/component.yaml
+    inputs:
+      prediction_data: ${{parent.inputs.prediction_data}}
+    outputs:
+      response_message: ${{parent.outputs.response_message}}

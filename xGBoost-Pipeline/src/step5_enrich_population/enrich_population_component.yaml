@@ -1,0 +1,39 @@
+name: enrich_population_density
+display_name: Enrich CSV with WorldPop Population Density
+version: 1
+type: command
+
+description: |
+  Enrich an input CSV with population density data using WorldPop .tif files.
+  Supports both Azure ML mounted folder input (Local) and online download (Remote).
+
+inputs:
+  input_enrich_weather_csv:
+    type: uri_file
+    description: CSV file with 'lat', 'lon', 'capture_date', and 'country_code'
+    optional: false
+
+  tif_input_folder:
+    type: uri_folder
+    description: Folder containing WorldPop .tif files (used only if status=Local)
+    optional: true
+
+  status:
+    type: string
+    default: Remote
+    description: "Set to 'Local' to use tif_input_folder, 'Remote' to download files."
+
+outputs:
+  output_population_csv:
+    type: uri_file
+    description: CSV file enriched with population_density column
+
+code: .
+environment: azureml:xgboost-pipeline-env:2 # Replace with your actual environment
+
+command: >-
+  python enrich_population.py
+  --input_enrich_weather_csv ${{inputs.input_enrich_weather_csv}}
+  --output_population_csv ${{outputs.output_population_csv}}
+  $[[--tif_input_folder ${{inputs.tif_input_folder}}]]
+  --status ${{inputs.status}}

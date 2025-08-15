@@ -1,0 +1,28 @@
+# ./src/push_to_powerbi.py
+
+import pandas as pd
+import requests
+import json
+import argparse
+
+def push_to_power_bi(csv_path, power_bi_url):
+    df = pd.read_csv(csv_path)
+    rows = df.to_dict(orient="records")
+    
+    payload = {"rows": rows}
+    headers = {"Content-Type": "application/json"}
+
+    response = requests.post(power_bi_url, headers=headers, data=json.dumps(payload))
+
+    if response.status_code == 200:
+        print("Data pushed to Power BI.")
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_csv", type=str)
+    parser.add_argument("--power_bi_url", type=str)
+    args = parser.parse_args()
+
+    push_to_power_bi(args.input_csv, args.power_bi_url)

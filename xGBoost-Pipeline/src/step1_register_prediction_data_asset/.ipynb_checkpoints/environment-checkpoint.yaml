@@ -1,0 +1,6 @@
+name: register-env
+dependencies:
+  - python=3.8
+  - pip:
+      - azure-ai-ml
+      - azure-identity

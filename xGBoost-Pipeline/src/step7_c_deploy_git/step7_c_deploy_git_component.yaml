@@ -1,0 +1,38 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: generate_sas_and_push_github
+display_name: Generate SAS Token and Push to GitHub
+type: command
+
+inputs:
+  pipeline_output_csv_url:
+    type: string
+  github_branch:
+    type: string
+    default: "main"
+  github_token:
+    type: string
+  github_username:
+    type: string
+  repo_name:
+    type: string
+  sas_expiry_days:
+    type: integer
+    default: 7
+
+outputs:
+  sas_url_file:
+    type: uri_file
+
+code: .
+environment: azureml:xgboost-pipeline-env:14
+
+command: >
+  python step7_c_deploy_git.py
+  --pipeline_output_csv_url ${{inputs.pipeline_output_csv_url}}
+  --github_token ${{inputs.github_token}}
+  --repo_name ${{inputs.repo_name}}
+  --github_username ${{inputs.github_username}}
+  --github_branch ${{inputs.github_branch}}
+  --sas_expiry_days ${{inputs.sas_expiry_days}}
+  && cp my-github-repo/sas_url.txt ${{outputs.sas_url_file}}
+

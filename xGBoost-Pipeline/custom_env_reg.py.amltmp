@@ -1,0 +1,19 @@
+from azure.ai.ml import MLClient
+from azure.ai.ml.entities import Environment
+from azure.identity import DefaultAzureCredential
+from azureml.core import Workspace
+from azureml.core import Environment
+
+ws = Workspace.from_config()
+ml_client = MLClient(
+    DefaultAzureCredential(),
+    subscription_id=ws.subscription_id,
+    resource_group_name=ws.resource_group,
+    workspace_name=ws.name
+)
+
+custom_env = Environment.from_conda_specification(
+    name="custom-sklearn-1.0-azure-ai-ml",
+    file_path="custom_env.yaml"
+)
+ml_client.environments.create_or_update(env)

@@ -1,0 +1,20 @@
+name: enrich_weather_data
+display_name: Weather Enrichment
+description: Adds NASA rainfall and wind speed to disaster data
+version: 1
+type: command
+
+inputs:
+  input_enrich_csv:
+    type: uri_file
+
+outputs:
+  output_weather_csv:
+    type: uri_file
+
+code: .
+environment: azureml:xgboost-pipeline-env:3  # Replace with your actual environment
+command: >
+  python enrich_weather.py
+  --input_enrich_csv ${{inputs.input_enrich_csv}}
+  --output_weather_csv ${{outputs.output_weather_csv}}

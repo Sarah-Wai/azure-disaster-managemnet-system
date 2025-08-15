@@ -1,0 +1,22 @@
+name: enrich_component
+display_name: Enrich Merged CSV with Geolocation
+type: command
+
+inputs:
+  merged_csv:
+    type: uri_file
+  opencage_api_key:
+    type: string
+
+outputs:
+  enriched_csv:
+    type: uri_file
+
+code: .
+environment: azureml:xgboost-pipeline-env:1
+
+command: >-
+  python enrich_data.py
+  --merged_csv ${{inputs.merged_csv}}
+  --opencage_api_key ${{inputs.opencage_api_key}}
+  --enriched_csv ${{outputs.enriched_csv}}

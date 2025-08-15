@@ -1,0 +1,23 @@
+name: register_prediction_data_asset
+display_name: Register Prediction CSV as DataAsset
+version: 1
+type: command
+
+inputs:
+  file_path:
+    type: uri_file
+  asset_name:
+    type: string
+
+outputs:
+  registered_asset_uri:
+    type: uri_file
+
+code: .  # Make sure your script is in this directory
+environment: azureml:xgboost-pipeline-env:1
+
+command: >-
+  python register_prediction_data_asset.py
+  --file_path ${{inputs.file_path}}
+  --asset_name ${{inputs.asset_name}}
+  --registered_asset_uri ${{outputs.registered_asset_uri}}

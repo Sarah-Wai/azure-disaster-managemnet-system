@@ -1,0 +1,36 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: train_xgboost
+display_name: Train XGBoost Model
+version: 1
+type: command
+
+inputs:
+  training_data:
+    type: uri_file
+    description: CSV file containing training data
+
+outputs:
+  model_dir:
+    type: uri_folder
+    description: Folder to save trained model and label encoder
+  powerbi_output:
+    type: uri_file
+    description: CSV file for Power BI visualizations
+  risk_matrix_output:
+    type: uri_file
+    description: CSV file for Risk Matrix Power BI visualizations
+  priority_matrix_output:
+    type: uri_file
+    description: CSV file for Priority Matrix Power BI visualizations
+
+code: .  # Path to your source code directory
+environment: azureml:xgboost-pipeline-env:12  # Replace with your registered environment if needed
+
+command: >-
+  python train_xgboost.py
+  --input_csv ${{inputs.training_data}}
+  --output_model ${{outputs.model_dir}}/model.pkl
+  --output_le ${{outputs.model_dir}}/label_encoder.pkl
+  --powerbi_output ${{outputs.powerbi_output}}
+  --risk_matrix_output ${{outputs.risk_matrix_output}}
+  --priority_matrix_output ${{outputs.priority_matrix_output}}

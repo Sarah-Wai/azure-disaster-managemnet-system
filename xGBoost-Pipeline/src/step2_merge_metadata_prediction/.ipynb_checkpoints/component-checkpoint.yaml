@@ -1,0 +1,18 @@
+name: merge_metea_prediction
+version: 1
+type: command
+inputs:
+  prediction_csv:
+    type: uri_file
+  original_csv:
+    type: uri_file
+outputs:
+  merged_csv:
+    type: uri_file
+code: .
+environment: azureml:my-custom-env:1
+command: >-
+  python merge_csv.py
+  --prediction_csv ${{inputs.prediction_csv}}
+  --original_csv ${{inputs.original_csv}}
+  --merged_csv ${{outputs.merged_csv}}

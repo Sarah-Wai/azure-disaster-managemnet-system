@@ -1,0 +1,74 @@
+import os
+import argparse
+from datetime import datetime, timedelta, timezone
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+import git
+import shutil
+
+def generate_sas_and_push_to_github(blob_url, sas_expiry_days, github_repo_url, github_branch="main"):
+    # Parse blob URL
+    blob_parts = blob_url.replace("https://", "").split("/")
+    account_name = blob_parts[0].split(".")[0]
+    container_name = blob_parts[1]
+    blob_path = "/".join(blob_parts[2:])
+    account_url = f"https://{account_name}.blob.core.windows.net"
+
+    # Get connection string from environment
+    blob_connection_string ="DefaultEndpointsProtocol=https;AccountName=xbdstorage;AccountKey=POVgRtHmnsCG6sn81uzNmTnTq3oiSytxh+4ff2VzEfcBHrnRkjShTHhoGXZrOlvUzEJCsxr5IAeu+AStnih41Q==;EndpointSuffix=core.windows.net" #os.getenv("BLOB_CONNECTION_STRING")
+    if not blob_connection_string:
+        raise ValueError("BLOB_CONNECTION_STRING environment variable not set.")
+
+    # Connect to Azure Blob Storage
+    blob_service_client = BlobServiceClient.from_connection_string(blob_connection_string)
+
+    # Generate SAS token
+    sas_token = generate_blob_sas(
+        account_name=account_name,
+        container_name=container_name,
+        blob_name=blob_path,
+        account_key=blob_service_client.credential.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=datetime.now(timezone.utc) + timedelta(days=sas_expiry_days)
+    )
+
+    sas_url = f"{account_url}/{container_name}/{blob_path}?{sas_token}"
+    print(f"SAS URL: {sas_url}")
+
+    # Clone GitHub repo
+    local_repo_path = "my-github-repo"
+    if os.path.exists(local_repo_path):
+        shutil.rmtree(local_repo_path)
+
+    repo = git.Repo.clone_from(github_repo_url, local_repo_path, branch=github_branch)
+
+    # Write SAS URL to file
+    sas_file_path = os.path.join(local_repo_path, "sas_url.txt")
+    with open(sas_file_path, "w") as f:
+        f.write(sas_url)
+
+    # Commit and push
+    repo.git.add("sas_url.txt")
+    repo.index.commit("Add SAS URL for pipeline output CSV")
+    origin = repo.remote(name="origin")
+    origin.push()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pipeline_output_csv_url", type=str, required=True)
+    parser.add_argument("--sas_expiry_days", type=int, default=7)
+    parser.add_argument("--github_token", type=str, required=True)
+    parser.add_argument("--github_username", type=str, required=True)
+    parser.add_argument("--repo_name", type=str, required=True)
+    parser.add_argument("--github_branch", type=str, default="main")
+    args = parser.parse_args()
+    
+    github_repo_url = f"https://{args.github_token}@github.com/{args.github_username}/{args.repo_name}.git"
+
+       
+    print(github_repo_url)
+    #generate_sas_and_push_to_github(
+      #  blob_url=args.pipeline_output_csv_url,
+      #  sas_expiry_days=args.sas_expiry_days,
+      #  github_repo_url=github_repo_url,
+      #  github_branch=args.github_branch
+    #)

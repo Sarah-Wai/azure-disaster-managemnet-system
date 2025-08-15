@@ -1,0 +1,21 @@
+name: xgboost-pipeline-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - pip:
+      - azureml-core
+      - azure-identity
+      - pandas
+      - numpy
+      - requests
+      - scikit-learn
+      - rasterio
+      - aiohttp
+      - xgboost
+      - joblib
+      - azureml-inference-server-http
+      - azure-storage-blob
+      - gitpython
