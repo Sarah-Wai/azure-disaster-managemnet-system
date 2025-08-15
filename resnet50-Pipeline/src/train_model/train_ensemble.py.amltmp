@@ -1,0 +1,353 @@
+import os
+import random
+import argparse
+import logging
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+from PIL import Image
+from collections import Counter
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader, random_split
+from torchvision import datasets, models, transforms
+
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from azureml.core import Run
+
+run = Run.get_context()
+
+# ----------------- Logging -----------------
+def setup_logging(log_dir="logs"):
+    os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"ensemble_train_{timestamp}.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()]
+    )
+    return logging.getLogger()
+
+# ----------------- Oversampled Dataset -----------------
+class BalancedDataset(Dataset):
+    def __init__(self, data_dir, transform=None):
+        self.dataset = datasets.ImageFolder(data_dir)
+        self.transform = transform
+
+        class_to_samples = {}
+        for path, label in self.dataset.samples:
+            class_to_samples.setdefault(label, []).append((path, label))
+
+        max_count = max(len(samples) for samples in class_to_samples.values())
+
+        self.samples = []
+        for label, samples in class_to_samples.items():
+            if len(samples) < max_count:
+                oversampled = random.choices(samples, k=max_count)
+            else:
+                oversampled = random.sample(samples, k=max_count)
+            self.samples.extend(oversampled)
+
+        self.class_to_idx = self.dataset.class_to_idx
+        self.classes = self.dataset.classes
+
+        # --- NEW: Print class distribution after oversampling ---
+        labels = [label for _, label in self.samples]
+        label_counts = Counter(labels)
+        print("BalancedDataset class distribution:")
+        for label, count in sorted(label_counts.items()):
+            class_name = self.classes[label]
+            print(f"Class {label} ({class_name}): {count} samples")
+        # ---------------------------------------------------------
+
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        image = Image.open(path).convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+        return image, label
+
+# ----------------- Evaluation -----------------
+def ensemble_classification_report(models, loader, class_names, logger, output_dir,device, split_name="ensemble"):
+    all_preds = []
+    all_labels = []
+
+    # Collect ensemble predictions
+    with torch.no_grad():
+        for imgs, labels in loader:
+            imgs, labels = imgs.to(device), labels.to(device)
+            logits_sum = None
+            for m in models:
+                m.eval()
+                out = m(imgs)
+                logits_sum = out if logits_sum is None else logits_sum + out
+
+            avg_logits = logits_sum / len(models)
+            preds = avg_logits.argmax(dim=1)
+
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    # Use common function to evaluate
+    evaluate_predictions(
+        y_true=all_labels,
+        y_pred=all_preds,
+        class_names=class_names,
+        logger=logger,
+        split_name=split_name,
+        output_dir=output_dir
+    )
+
+def evaluate_predictions(y_true, y_pred, class_names, logger, split_name, output_dir):
+    acc = accuracy_score(y_true, y_pred)
+    logger.info(f"{split_name} Accuracy: {acc:.4f}")
+    run.log(f"{split_name} Accuracy", acc)  # Numeric metric logging
+
+    report = classification_report(y_true, y_pred, target_names=class_names)
+    logger.info(f"{split_name} Classification Report:\n{report}")
+    run.log(f"{split_name} Classification Report", report)
+
+    cm = confusion_matrix(y_true, y_pred)
+    logger.info(f"{split_name} Confusion Matrix:\n{cm}")
+    run.log(f"{split_name} Confusion Matrix", str(cm))
+
+    # Save metrics text file
+    metrics_file = os.path.join(output_dir, f"{split_name}_metrics.txt")
+    with open(metrics_file, "w") as f:
+        f.write(f"Accuracy: {acc:.4f}\n")
+        f.write(f"Classification Report:\n{report}\n")
+        f.write(f"Confusion Matrix:\n{cm}\n")
+
+    # Upload metrics file to Azure ML job outputs
+    run.upload_file(name=f"outputs/{split_name}_metrics.txt", path_or_stream=metrics_file)
+
+    # Plot and save confusion matrix image
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"{split_name.capitalize()} Confusion Matrix")
+    cm_path = os.path.join(output_dir, f"{split_name}_confusion_matrix.png")
+    plt.savefig(cm_path)
+    plt.close()
+    logger.info(f"{split_name} Confusion matrix saved to {cm_path}")
+
+    # Upload image to Azure ML job outputs
+    run.upload_file(name=f"outputs/{split_name}_confusion_matrix.png", path_or_stream=cm_path)
+
+    # Log confusion matrix as image for metrics view
+    run.log_image(f"{split_name} Confusion Matrix", path=cm_path)
+
+
+# ----------------- Prediction & CSV -----------------
+def generate_predictions_csv(models, loader, dataset, source, output_dir, device):
+    all_outputs = []
+    image_names = []
+
+    for model in models:
+        model.eval()
+        preds_list = []
+        with torch.no_grad():
+            for inputs, _ in loader:
+                inputs = inputs.to(device)
+                outputs = torch.softmax(model(inputs), dim=1).cpu()
+                preds_list.append(outputs)
+        all_outputs.append(torch.cat(preds_list, dim=0))
+
+    avg_outputs = sum(all_outputs) / len(models)
+    y_pred = avg_outputs.argmax(dim=1).numpy()
+
+    for path, _ in dataset.samples:
+        image_names.append(os.path.basename(path))
+
+    df = pd.DataFrame({
+        "image_name": image_names,
+        "damage_level": [dataset.classes[idx] for idx in y_pred],
+        "source": source
+    })
+
+    csv_path = os.path.join(output_dir, f"{source}_predictions.csv")
+    df.to_csv(csv_path, index=False)
+    return y_pred, [label for _, label in dataset.samples], csv_path
+
+# ----------------- Train Function with Early Stopping -----------------
+def train_model(model, train_loader, val_loader, criterion, optimizer, device, num_epochs):
+    run = Run.get_context()
+    model.to(device)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+
+    best_loss = float('inf')
+    patience_counter = 0
+    patience_limit = 5
+    best_model_wts = None
+
+    for epoch in range(num_epochs):
+        model.train()
+        running_loss = 0.0
+
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+
+        epoch_loss = running_loss / len(train_loader)
+
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+        val_loss /= len(val_loader)
+
+        scheduler.step(val_loss)
+
+        print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}")
+        run.log("Epoch Progress", f"{epoch+1}/{num_epochs}")
+        run.log(f"Train Loss: {epoch_loss:.4f}",{epoch_loss})
+        run.log(f"Val Loss: {val_loss:.4f}",{val_loss})
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            best_model_wts = model.state_dict()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= patience_limit:
+                print("Early stopping triggered!")
+                break
+
+    if best_model_wts:
+        model.load_state_dict(best_model_wts)
+    return model
+
+# ----------------- Main Entry -----------------
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train_data', type=str, required=True)
+    parser.add_argument('--test_data', type=str, required=True)
+    parser.add_argument('--epoch', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--output_dir', type=str, default="outputs")
+    args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    logger = setup_logging()
+    run = Run.get_context()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+    
+
+    # Augmentations
+    train_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.ToTensor()
+    ])
+    test_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor()
+    ])
+
+    # Load and split dataset
+    full_train_ds = BalancedDataset(args.train_data, transform=train_transform)
+    #train_size = int(0.8 * len(full_train_ds))
+    #val_size = len(full_train_ds) - train_size
+    #train_subset, val_subset = random_split(full_train_ds, [train_size, val_size])
+    train_loader = DataLoader(full_train_ds, batch_size=args.batch_size, shuffle=True)
+    #val_loader = DataLoader(val_subset, batch_size=args.batch_size, shuffle=False)
+
+    test_ds = datasets.ImageFolder(args.test_data, transform=test_transform)
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
+
+    class_names = full_train_ds.classes
+
+    # Train models
+    model_names = ['resnet50', 'efficientnet_b0', 'densenet121']
+    trained_models = []
+
+    for name in model_names:
+        logger.info(f"Training model: {name}")
+        #run.log("Model Name", name)
+
+        if name == 'resnet50':
+            model = models.resnet50(weights='IMAGENET1K_V2')
+            model.fc = nn.Sequential(
+                nn.Dropout(0.5),
+                nn.Linear(model.fc.in_features, len(class_names))
+            )
+        elif name == 'efficientnet_b0':
+            model = models.efficientnet_b0(weights='IMAGENET1K_V1')
+            model.classifier[1] = nn.Sequential(
+                nn.Dropout(0.5),
+                nn.Linear(model.classifier[1].in_features, len(class_names))
+            )
+        elif name == 'densenet121':
+            model = models.densenet121(weights='IMAGENET1K_V1')
+            model.classifier = nn.Sequential(
+                nn.Dropout(0.5),
+                nn.Linear(model.classifier.in_features, len(class_names))
+            )
+        else:
+            raise ValueError(f"Unknown model name: {name}")
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+
+        model = train_model(model, train_loader, test_loader, criterion, optimizer, device, args.epoch)
+        trained_models.append(model)
+
+    # Evaluate on full training set
+    full_train_ds_eval = datasets.ImageFolder(args.train_data, transform=test_transform)
+    full_train_loader_eval = DataLoader(full_train_ds_eval, batch_size=args.batch_size, shuffle=False)
+
+
+
+    y_pred_train, y_true_train, train_csv = generate_predictions_csv(
+        trained_models, full_train_loader_eval, full_train_ds_eval, "train", args.output_dir, device
+    )
+    ensemble_classification_report(trained_models, full_train_loader_eval, class_names, logger, args.output_dir,device, split_name="train")
+    #evaluate_predictions(y_true_train, y_pred_train, class_names, logger, "train", args.output_dir)
+
+    # Evaluate on test set
+    y_pred_test, y_true_test, test_csv = generate_predictions_csv(
+        trained_models, test_loader, test_ds, "test", args.output_dir, device
+    )
+    ensemble_classification_report(trained_models, test_loader, class_names, logger, args.output_dir,device, split_name="test")
+    #evaluate_predictions(y_true_test, y_pred_test, class_names, logger, "test", args.output_dir)
+
+    # Combine CSVs
+    train_df = pd.read_csv(train_csv)
+    test_df = pd.read_csv(test_csv)
+    combined_df = pd.concat([train_df, test_df], ignore_index=True)
+    combined_csv_path = os.path.join(args.output_dir, "combined_predictions.csv")
+    combined_df.to_csv(combined_csv_path, index=False)
+
+    logger.info(f"Combined predictions saved to: {combined_csv_path}")
+    run.log("Combined CSV Path", combined_csv_path)
+
+if __name__ == "__main__":
+    main()
