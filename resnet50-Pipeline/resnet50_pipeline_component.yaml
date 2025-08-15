@@ -1,0 +1,20 @@
+name: resnet50_pipeline_component
+display_name: ResNet50 Training Pipeline
+type: pipeline
+description: Pipeline to train a ResNet50 model on disaster dataset.
+version: 1
+tags:
+  project: disaster-risk
+
+inputs: {}
+outputs:
+  resnet_predict_assest:
+    type: uri_file
+
+jobs:
+  resnet_train:
+    type: command
+    component: src/train_model/train_ensemble_component.yaml
+    inputs: {}
+    outputs:
+      resnet_predict_assest: ${{parent.outputs.resnet_predict_assest}}
