@@ -39,11 +39,11 @@ train_aks_component=load_component(
 generate_sas_component=load_component(
     source="src/step7_c_deploy_git/step7_c_deploy_git_component.yaml"
 ) 
-github_token = "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" # Make sure this is set in your Azure ML environment
+github_token = "github_pat_****" # Make sure this is set in your Azure ML environment
 
 # Construct authenticated GitHub URL
-github_username = "Sarah-Wai"
-repo_name = "disaster-dashboard-repo"
+github_username = "S***"
+repo_name = "di***-***-repo"
 authenticated_repo_url = f"https://{github_token}@github.com/{github_username}/{repo_name}.git"
 
 # -------------------------------
@@ -58,7 +58,7 @@ def xgboost_pipeline():
     ) 
     enrich_country_step = enrich_country_component(
         merged_csv=merge_step.outputs.merged_csv,
-        opencage_api_key="da5a0ea687f24539af2d0225609e1a5a"  # Ideally from a secure source
+        opencage_api_key="******"  # Ideally from a secure source
     ) 
    
     enrich_weather_step = enrich_weather_component(
@@ -91,7 +91,7 @@ def xgboost_pipeline():
     )
  
     sas_github_step = generate_sas_component(
-        pipeline_output_csv_url="https://uofrmlstudent1972267660.blob.core.windows.net/azureml-blobstore-c1ea77a6-69dd-40f4-b128-0361949bd439/azureml/fc31878a-b500-4766-924f-627c9ecb64ee/powerbi_output",
+        pipeline_output_csv_url="https://****powerbi_output",
         github_branch="main",
         sas_expiry_days=7,
         github_username=github_username,
@@ -106,38 +106,6 @@ def xgboost_pipeline():
         "endpoint_uri": train_aks_step.outputs.endpoint_uri,
         "sas_url_file": sas_github_step.outputs.sas_url_file
     }
-
-    #"registered_data": merge_step.outputs.merged_csv,
-    #"country_enriched_data": enrich_country_step.outputs.enriched_csv,
-    #"weather_enriched_data": enrich_weather_step.outputs.output_weather_csv,
-    #"population_enriched_data": enrich_population_step.outputs.output_population_csv,
-    #"trained_output": xgboost_train_step.outputs.powerbi_output,
-    #"powerbi_response": push_powerbi_step.outputs.response_message,
-    #"endpoint_uri":train_aks_step.outputs.endpoint_uri
-    ''' register_step = register_prediction_component(
-       file_path=Input(
-        type="uri_file",
-        path="azureml://subscriptions/88b4cc90-e6c1-421c-9f5e-adaa14a0ed73/resourcegroups/rs-ml/workspaces/uofr-ml-student/datastores/damage_data_store/paths/predictions_data.csv"
-    ),
-    asset_name="prediction_csv_asset"
-    )
-    '''
-
-# Load your environment variable securely
-
-@pipeline(default_compute="wai-cpu")
-def merge_only_pipeline():
-    sas_step = generate_sas_component(
-        pipeline_output_csv_url="https://uofrmlstudent1972267660.blob.core.windows.net/azureml-blobstore-c1ea77a6-69dd-40f4-b128-0361949bd439/azureml/fc31878a-b500-4766-924f-627c9ecb64ee/powerbi_output",
-        github_branch="main",
-        sas_expiry_days=7,
-        github_username=github_username,
-        repo_name=repo_name,
-        github_token=github_token
-    )
-    return {"sas_step_output": sas_step.outputs.sas_url_file}
-   
-
 
 # -------------------------------
 # 3. Run pipeline
@@ -155,11 +123,3 @@ if __name__ == "__main__":
     submitted_job = ml_client.jobs.create_or_update(pipeline_job)
     print(f"Job submitted. Name: {submitted_job.name}")
     
-    '''
-    # Submit the pipeline
-    merge_only_job = ml_client.jobs.create_or_update(
-        merge_only_pipeline(), 
-        experiment_name="sas_github_step")
-    print(f"Submitted pipeline job: {merge_only_job.name}")
-    '''
-
