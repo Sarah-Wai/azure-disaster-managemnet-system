@@ -14,7 +14,7 @@ def generate_sas_and_push_to_github(blob_url, sas_expiry_days, github_repo_url, 
     account_url = f"https://{account_name}.blob.core.windows.net"
 
     # Get connection string from environment
-    blob_connection_string ="DefaultEndpointsProtocol=https;AccountName=xbdstorage;AccountKey=POVgRtHmnsCG6sn81uzNmTnTq3oiSytxh+4ff2VzEfcBHrnRkjShTHhoGXZrOlvUzEJCsxr5IAeu+AStnih41Q==;EndpointSuffix=core.windows.net" #os.getenv("BLOB_CONNECTION_STRING")
+    blob_connection_string ="DefaultEndpointsProtocol=https;AccountName=*****;AccountKey=****==;EndpointSuffix=core.windows.net" #os.getenv("BLOB_CONNECTION_STRING")
     if not blob_connection_string:
         raise ValueError("BLOB_CONNECTION_STRING environment variable not set.")
 
