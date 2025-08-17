@@ -8,9 +8,9 @@ def main(predictions_path: str):
     # Connect to Azure ML workspace
     ml_client = MLClient(
          credential=DefaultAzureCredential(),
-         subscription_id="88b4cc90-e6c1-421c-9f5e-adaa14a0ed73",
-         resource_group_name="rs-ml",
-         workspace_name="uofr-ml-student"
+             subscription_id="***",
+            resource_group_name="r***",
+            workspace_name="uofr-***t"
     )
 
     data_asset = Data(
