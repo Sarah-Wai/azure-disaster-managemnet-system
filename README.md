@@ -166,7 +166,7 @@ Result:
 
 ---
 
-## 🚀 Deployment
+##  Deployment
 
 ###  AKS Endpoint
 
